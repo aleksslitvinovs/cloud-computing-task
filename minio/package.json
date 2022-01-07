@@ -1,0 +1,17 @@
+{
+  "name": "minio",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "upload-minio": "node upload-minio.js",
+    "download-minio": "node download-minio.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "minio": "7.0.25"
+  }
+}
