@@ -1,24 +1,16 @@
-FROM ubuntu:latest
+FROM node
 
-RUN useradd litvinovs
-RUN usermod -aG sudo litvinovs
+WORKDIR /usr/app
 
-WORKDIR /usr/local
+COPY package*.json ./
+RUN npm ci
+COPY ./ ./
 
-RUN apt-get update
-RUN apt-get install -y curl
-RUN curl -fsSL https://deb.nodesource.com/setup_17.x | bash -
-RUN apt-get install -y nodejs
+RUN mkdir -p uploads
 
-ADD ./ /usr/local/
-
-RUN npm install
-
-RUN chown -R litvinovs /usr/local
-
-EXPOSE 100
+RUN wget -O ./wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
+RUN chmod +x ./wait-for-it.sh
 
 HEALTHCHECK --interval=10s --timeout=3s CMD node index.js
 
-USER litvinovs
 CMD ["node", "index.js"]

@@ -1,14 +1,15 @@
 FROM openalpr/openalpr:latest
 
-WORKDIR /usr/local 
+WORKDIR /usr/app
 
-COPY ./ /usr/local
-
-# ENTRYPOINT [ "/bin/bash" ]
-EXPOSE 3001
+COPY package*.json ./
 
 RUN curl -fsSL https://deb.nodesource.com/setup_14.x | bash -
 RUN apt-get install -y nodejs
 RUN npm install
 
-CMD ["node", "index.js"]
+COPY ./ ./
+
+ENTRYPOINT ["node", "index.js"]
+
+EXPOSE 3002

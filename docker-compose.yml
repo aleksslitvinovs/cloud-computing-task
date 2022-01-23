@@ -1,0 +1,79 @@
+version: "3.2"
+services:
+  rabbitmq-server:
+    build:
+      context: ./rabbitmq/server
+    container_name: rabbitmq
+    ports:
+      - 8080:15672
+    networks:
+      - rabbitmq-net
+
+  minio:
+    build:
+      context: ./minio
+    container_name: minio
+    ports:
+      - 9001:9001
+    networks:
+      - minio-net
+
+  api:
+    build:
+      context: ./api
+    container_name: api
+    command: sh -c './wait-for-it.sh rabbitmq:5672 --timeout=30 -- node index.js'
+    ports:
+      - 3000:3000
+    depends_on:
+      - rabbitmq-server
+      - minio
+    environment:
+      - API_PORT
+      - RABBITMQ_URL
+      - RABBITMQ_QUEUE
+      - MINIO_ACCESS_KEY
+      - MINIO_SECRET_KEY
+      - MINIO_PORT
+      - MINIO_BUCKET_NAME
+    networks:
+      - rabbitmq-net
+      - minio-net
+
+  rabbitmq-consumer:
+    build:
+      context: ./rabbitmq/consumer
+    container_name: rabbitmq-consumer
+    depends_on:
+      - rabbitmq-server
+    command: sh -c '/bin/wait-for-it.sh rabbitmq:5672 --timeout=30 -- node index.js'
+    environment:
+      - OPEN_ALPR_PORT
+      - RABBITMQ_URL
+      - RABBITMQ_QUEUE
+    networks:
+      - rabbitmq-net
+      - open-alpr-net
+
+  open-alpr:
+    build:
+      context: ./open_alpr
+    container_name: open-alpr
+    depends_on:
+      - rabbitmq-consumer
+    environment:
+      - MINIO_ACCESS_KEY
+      - MINIO_SECRET_KEY
+      - MINIO_PORT
+      - MINIO_BUCKET_NAME
+      - OPEN_ALPR_PORT
+    networks:
+      - open-alpr-net
+      - minio-net
+networks:
+  rabbitmq-net:
+    driver: bridge
+  minio-net:
+    driver: bridge
+  open-alpr-net:
+    driver: bridge
