@@ -26,4 +26,6 @@ channel.assertQueue(process.env.RABBITMQ_QUEUE, { durable: true });
 
 console.log("RabbitMQ consumer is ready");
 
+// TODO: If we add a new RabbitMQ queue, we need to add a new handler for it,
+// siimlar to this one
 channel.consume(process.env.RABBITMQ_QUEUE, handleMessage, { noAck: true });

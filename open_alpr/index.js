@@ -2,8 +2,17 @@ import express from "express";
 import child_process from "child_process";
 import minio from "minio";
 import path from "path";
+import { Tedis } from "tedis";
+import moment from "moment";
+
+import { sendDurationEmail } from "./email.js";
 
 const downloadDir = "tmp";
+
+const tedis = new Tedis({
+  port: process.env.REDIS_PORT,
+  host: "redis",
+});
 
 const minioClient = new minio.Client({
   accessKey: process.env.MINIO_ACCESS_KEY,
@@ -30,6 +39,25 @@ const downloadFile = (filename) =>
     )
   );
 
+// TODO: Delete plate if it is found
+const handleExistingPlate = async (plate, res) => {
+  const exitTime = moment(new Date().toISOString(), true);
+
+  const entryTime = moment(
+    await tedis.get(plate).catch((err) => console.error(err))
+  );
+
+  const duration = moment.duration(exitTime.diff(entryTime));
+
+  // TODO: Use better duration format
+  console.log(
+    `Duration: ${duration.asHours()} h ${duration.asMinutes()} m ${duration.asSeconds()} s`
+  );
+
+  sendDurationEmail(plate, duration);
+};
+
+// TODO: Clean up this function
 const processPlate = (filename, res) => {
   child_process.exec(
     `alpr -c eu -j ${path.join(downloadDir, filename)}`,
@@ -55,7 +83,8 @@ const processPlate = (filename, res) => {
       }
 
       console.log(plateOutput);
-      if (plateOutput.results.length === 0) {
+
+      if (!plateOutput?.results || plateOutput.results.length === 0) {
         console.log("No plate found");
         res.send(plateOutput.results);
 
@@ -63,9 +92,25 @@ const processPlate = (filename, res) => {
       }
 
       console.log("Found number plate");
-      console.log(plateOutput.results[0].plate);
 
-      res.send(plateOutput.results[0].plate);
+      const { plate } = plateOutput.results[0];
+
+      console.log(plate);
+
+      tedis.exists(plate).then((exists) => {
+        if (exists === 1) {
+          handleExistingPlate(plate, res);
+        }
+
+        console.log("Saving plate");
+
+        tedis
+          .set(plate, new Date().toISOString())
+          .then((value) => console.log(value))
+          .catch((err) => console.error(err));
+      });
+
+      res.status(200).send("Plate found and saved in record");
     }
   );
 };
@@ -95,6 +140,8 @@ const entryHanlder = async (req, res) => {
 const app = express();
 
 app.use(express.json());
+// TODO: If we are creating a separate RabbitMQ queue, most likely we need a
+// a similar endpoint for this
 app.post("/entry", entryHanlder);
 app.use((_req, res, _next) => res.status(404).send("Not found"));
 app.listen(process.env.OPEN_ALPR_PORT, () =>

@@ -55,25 +55,39 @@ services:
       - rabbitmq-net
       - open-alpr-net
 
+  redis:
+    build:
+      context: ./redis
+    container_name: redis
+    ports:
+      - 6379:6379
+    networks:
+      - redis-net
+
   open-alpr:
     build:
       context: ./open_alpr
     container_name: open-alpr
     depends_on:
       - rabbitmq-consumer
+      - redis
     environment:
       - MINIO_ACCESS_KEY
       - MINIO_SECRET_KEY
       - MINIO_PORT
       - MINIO_BUCKET_NAME
       - OPEN_ALPR_PORT
+      - REDIS_PORT
     networks:
       - open-alpr-net
       - minio-net
+      - redis-net
 networks:
   rabbitmq-net:
     driver: bridge
   minio-net:
     driver: bridge
   open-alpr-net:
+    driver: bridge
+  redis-net:
     driver: bridge

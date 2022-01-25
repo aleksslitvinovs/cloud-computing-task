@@ -1,28 +1,8 @@
 import express from "express";
 import multer from "multer";
-import amqp from "amqplib";
-import minio from "minio";
 
-const queue = process.env.RABBITMQ_QUEUE;
-
-const bucketName = process.env.MINIO_BUCKET_NAME;
-
-const minioClient = new minio.Client({
-  accessKey: process.env.MINIO_ACCESS_KEY,
-  secretKey: process.env.MINIO_SECRET_KEY,
-
-  // Use 'minio' for inter-container communication.
-  // Use 'localhost' for host-container communication.
-  endPoint: "minio",
-  port: parseInt(process.env.MINIO_PORT),
-  useSSL: false,
-});
-
-const rabbitMQClient = await amqp
-  .connect(process.env.RABBITMQ_URL, "heartbeat=60")
-  .catch((err) => {
-    throw new Error(err);
-  });
+import { saveFile, createDefaultBucket } from "./minio.js";
+import { enqueueMessage } from "./rabbitmq.js";
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -74,33 +54,9 @@ const saveToMinio = async (req, res) => {
     return "";
   }
 
-  minioClient
-    .fPutObject(bucketName, filename, req.file.path)
-    .then(() => console.log("File uploaded successfully"))
-    .catch((err) => {
-      console.log(err);
-      res.status(500).send(err);
-    });
+  saveFile(filename, req, res);
 
   return filename;
-};
-
-const queueMessage = async (res, filename) => {
-  const channel = await rabbitMQClient.createChannel().catch((err) => {
-    res.status(500).send(err);
-  });
-
-  if (!channel) {
-    return;
-  }
-
-  channel.assertQueue(queue, { durable: true });
-
-  const data = JSON.stringify({ filename });
-
-  channel.sendToQueue(queue, Buffer.from(data));
-
-  console.log(`Enqueued ${data}`);
 };
 
 const entryHandler = async (req, res) => {
@@ -109,7 +65,13 @@ const entryHandler = async (req, res) => {
     return;
   }
 
-  queueMessage(res, filename);
+  try {
+    await enqueueMessage(filename);
+  } catch (err) {
+    res.status(500).send("Error occured proccessing file");
+    console.log(err);
+    return;
+  }
 
   res.status(202).send("Processing image");
 };
@@ -117,21 +79,15 @@ const entryHandler = async (req, res) => {
 const app = express();
 
 app.post("/entry", entryHandler);
+
+// TODO: Handle this endpoint properly. ATM it works the same as POST /entry.
+// Maybe use a different RabbitMQ queue for this?
 app.post("/exit", entryHandler);
 
 app.use((_req, res, _next) => res.status(404).send("Not found"));
 
 app.listen(process.env.API_PORT, () => {
-  minioClient
-    .bucketExists(bucketName)
-    .then((doesExist) => {
-      if (!doesExist) {
-        minioClient.makeBucket(bucketName).catch((err) => console.error(err));
-
-        console.log(`Created '${bucketName}' bucket successfully`);
-      }
-    })
-    .catch((err) => console.error(err));
+  createDefaultBucket();
 
   console.log(`REST API listening on port ${process.env.API_PORT}!`);
 });
