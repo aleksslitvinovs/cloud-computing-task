@@ -24,7 +24,7 @@ services:
     container_name: api
     command: sh -c './wait-for-it.sh rabbitmq:5672 --timeout=30 -- node index.js'
     ports:
-      - 3000:3000
+      - 3005:3005
     depends_on:
       - rabbitmq-server
       - minio

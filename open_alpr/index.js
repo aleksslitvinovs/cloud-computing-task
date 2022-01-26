@@ -39,8 +39,7 @@ const downloadFile = (filename) =>
     )
   );
 
-// TODO: Delete plate if it is found
-const handleExistingPlate = async (plate, res) => {
+const handleExistingPlate = async (plate) => {
   const exitTime = moment(new Date().toISOString(), true);
 
   const entryTime = moment(
@@ -49,73 +48,82 @@ const handleExistingPlate = async (plate, res) => {
 
   const duration = moment.duration(exitTime.diff(entryTime));
 
-  // TODO: Use better duration format
-  console.log(
-    `Duration: ${duration.asHours()} h ${duration.asMinutes()} m ${duration.asSeconds()} s`
-  );
-
-  sendDurationEmail(plate, duration);
+  return new Promise((resolve, reject) => {
+    sendDurationEmail(plate, duration)
+      .then(() => resolve())
+      .catch((err) => reject(err))
+      .finally(() =>
+        tedis.del(plate).catch((err) => {
+          console.error(err);
+          reject(err);
+        })
+      );
+  });
 };
 
-// TODO: Clean up this function
-const processPlate = (filename, res) => {
-  child_process.exec(
-    `alpr -c eu -j ${path.join(downloadDir, filename)}`,
-    (error, stdout, stderr) => {
-      if (error) {
-        res.status(500).send(error);
-        return;
-      }
-
-      console.log(stderr);
-
-      console.log("Got info from alpr");
-      console.log(stdout.toString());
-      console.log("Parsing JSON");
-
-      let plateOutput;
-      try {
-        plateOutput = JSON.parse(stdout.toString());
-      } catch (e) {
-        console.log(`Error parsing JSON: ${e}`);
-
-        return;
-      }
-
-      console.log(plateOutput);
-
-      if (!plateOutput?.results || plateOutput.results.length === 0) {
-        console.log("No plate found");
-        res.send(plateOutput.results);
-
-        return;
-      }
-
-      console.log("Found number plate");
-
-      const { plate } = plateOutput.results[0];
-
-      console.log(plate);
-
-      tedis.exists(plate).then((exists) => {
+const savePlate = (plate) => {
+  return new Promise(async (resolve, reject) => {
+    tedis
+      .exists(plate)
+      .then((exists) => {
         if (exists === 1) {
-          handleExistingPlate(plate, res);
+          handleExistingPlate(plate)
+            .then(() => resolve())
+            .catch((err) => reject(err));
+
+          return;
         }
 
-        console.log("Saving plate");
+        tedis.set(plate, new Date().toISOString()).catch((err) => reject(err));
+      })
+      .catch((err) => reject(err));
+  });
+};
 
-        tedis
-          .set(plate, new Date().toISOString())
-          .then((value) => console.log(value))
-          .catch((err) => console.error(err));
-      });
+const processPlate = async (error, stdout, stderr, res) => {
+  if (error || stderr) {
+    res.status(500).send("Error occured proccessing file");
+    console.error(error || stderr);
 
-      res.status(200).send("Plate found and saved in record");
-    }
+    return;
+  }
+
+  let plateOutput;
+  try {
+    plateOutput = JSON.parse(stdout.toString());
+  } catch (e) {
+    res.status(500).send("Error processing plate");
+    console.error(`Error parsing JSON: ${e}`);
+
+    return;
+  }
+
+  if (!plateOutput?.results || plateOutput.results.length === 0) {
+    res.status(500).send("No plates found");
+    console.error("No plate found");
+
+    return;
+  }
+
+  const { plate } = plateOutput.results[0];
+  console.log(`Plate: ${plate}`);
+
+  savePlate(plate)
+    .then(() => res.status(200).send("Plate found and saved in record"))
+    .catch((err) => {
+      res.status(500).send("Error saving plate");
+      console.error(err);
+    });
+};
+
+const callOpenALPR = (filename, res) => {
+  child_process.exec(
+    `alpr -c eu -j ${path.join(downloadDir, filename)}`,
+    (error, stdout, stderr) => processPlate(error, stdout, stderr, res)
   );
 };
 
-const entryHanlder = async (req, res) => {
+const registerHandler = async (req, res) => {
   const { filename } = req.body;
 
   if (!filename) {
@@ -128,21 +136,19 @@ const entryHanlder = async (req, res) => {
   try {
     await downloadFile(filename);
   } catch (err) {
-    res.status(500).send("Error occurd proccessing file");
+    res.status(500).send("Error occured proccessing file");
     console.error(err);
 
     return;
   }
 
-  processPlate(filename, res);
+  callOpenALPR(filename, res);
 };
 
 const app = express();
 
 app.use(express.json());
-// TODO: If we are creating a separate RabbitMQ queue, most likely we need a
-// a similar endpoint for this
-app.post("/entry", entryHanlder);
+app.post("/register", registerHandler);
 app.use((_req, res, _next) => res.status(404).send("Not found"));
 app.listen(process.env.OPEN_ALPR_PORT, () =>
   console.log(`Example app listening on port ${process.env.OPEN_ALPR_PORT}!`)

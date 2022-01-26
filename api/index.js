@@ -59,7 +59,7 @@ const saveToMinio = async (req, res) => {
   return filename;
 };
 
-const entryHandler = async (req, res) => {
+const registerHandler = async (req, res) => {
   const filename = await saveToMinio(req, res);
   if (!filename) {
     return;
@@ -78,11 +78,7 @@ const entryHandler = async (req, res) => {
 
 const app = express();
 
-app.post("/entry", entryHandler);
-
-// TODO: Handle this endpoint properly. ATM it works the same as POST /entry.
-// Maybe use a different RabbitMQ queue for this?
-app.post("/exit", entryHandler);
+app.post("/register", registerHandler);
 
 app.use((_req, res, _next) => res.status(404).send("Not found"));
 

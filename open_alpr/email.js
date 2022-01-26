@@ -12,19 +12,33 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+transporter.verify(function (error, success) {
+  if (error) {
+    console.log(error);
+  } else {
+    console.log("Server is ready to take our messages");
+  }
+});
 
-// TODO: Check if this really works
-// console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
-// https://nodemailer.com/about/
+const formatDuration = (duration) => {
+  if (duration.asHours() < 1) {
+    if (duration.asMinutes() < 1) {
+      return `${duration.seconds()} seconds`;
+    }
+
+    return `${duration.minutes()} minutes ${duration.seconds()} seconds`;
+  }
+
+  return `${duration.hours()} hours ${duration.minutes()} minutes ${duration.seconds()} seconds`;
+};
+
 export const sendDurationEmail = (plate, duration) => {
-  transporter
+  return transporter
     .sendMail({
       from: { name: "Open ALPR", address: "alpr@alpr.com" },
-      to: "a.litvinovs123@gmail.com",
+      to: testAccount.user,
       subject: `Your parking duration for car '${plate}'`,
-      // TODO: Use better duration format
-      text: `Duration: ${duration.asHours()} h ${duration.asMinutes()} m ${duration.asSeconds()} s`,
+      text: `Duration: ${formatDuration(duration)}`,
     })
-    .then((value) => console.log(value))
-    .catch((err) => console.error(err));
+    .then((value) => console.log(nodemailer.getTestMessageUrl(value)));
 };
