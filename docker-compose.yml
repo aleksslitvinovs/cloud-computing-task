@@ -22,7 +22,7 @@ services:
     build:
       context: ./api
     container_name: api
-    command: sh -c './wait-for-it.sh rabbitmq:5672 --timeout=30 -- node index.js'
+    command: sh -c './wait-for-it.sh rabbitmq:5672 --timeout=60 -- node index.js'
     ports:
       - 3005:3005
     depends_on:
@@ -46,7 +46,7 @@ services:
     container_name: rabbitmq-consumer
     depends_on:
       - rabbitmq-server
-    command: sh -c '/bin/wait-for-it.sh rabbitmq:5672 --timeout=30 -- node index.js'
+    command: sh -c './wait-for-it.sh rabbitmq:5672 --timeout=60 -- node index.js'
     environment:
       - OPEN_ALPR_PORT
       - RABBITMQ_URL

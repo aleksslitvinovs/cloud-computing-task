@@ -16,33 +16,21 @@ docker-compose up
 docker-compose down
 ```
 
----
+### P.S.
 
-### API [TBD]
-
-### MinIO
+To clean all containers and images run the following:
 
 ```bash
-cd minio
-docker build . -t my-minio
-
-docker run -d -p 9000:9000 9001:9001 my-minio
+docker rmi $(docker images -q)
+docker-compose build --no-cache
+docker-compose up
 ```
 
-### OpenALPR
+## Send requests
 
+To send requests to API server run, send POST request to
+http://localhost:3005/register and pass image as form-data with name "image"
+like so: 
 ```bash
-cd open_alpr
-docker build . -t my-open-alpr
-
-docker run -it -p 3002:3002 -it my-open-alpr
-```
-
-### RabbitMQ [TBD]
-
-```bash
-cd rabbitmq
-docker build . -t my-rabbitmq
-
-docker run -d -p 8080:15672 -p 5672:5672 my-rabbitmq
+curl -X POST -F "image=@/path/to/image.jpg" http://localhost:3005/register`
 ```

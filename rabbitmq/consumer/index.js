@@ -1,9 +1,11 @@
 import amqp from "amqplib";
 import axios from "axios";
 
-const rabbitMQ = await amqp.connect(process.env.RABBITMQ_URL).catch((err) => {
-  throw new Error(err);
-});
+const rabbitMQ = await amqp
+  .connect(process.env.RABBITMQ_URL, "heartbeat=60")
+  .catch((err) => {
+    throw new Error(err);
+  });
 
 const channel = await rabbitMQ.createChannel().catch((err) => {
   throw new Error(err);
